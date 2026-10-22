@@ -1,91 +1,189 @@
+"use strict";
+/**
+ * database.js — PostgreSQL adapter for MOTORENT
+ *
+ * Uses @neondatabase/serverless for HTTP-based Postgres access.
+ * This driver works correctly in Vercel serverless functions AND
+ * in long-lived Node.js processes (local dev).
+ *
+ * Connection string priority:
+ *   DATABASE_URL  →  POSTGRES_URL  →  DATABASE_URL_UNPOOLED  →  POSTGRES_URL_NON_POOLING
+ */
 
-const Database = require("better-sqlite3");
+require("dotenv").config();
+const { neon, neonConfig } = require("@neondatabase/serverless");
 
-const db = new Database("database.db");
+// Optional: use WebSocket pooling in non-edge environments for better performance
+// neonConfig.webSocketConstructor = require("ws");   // uncomment if you install ws
 
-db.pragma("foreign_keys = ON");
+const connectionString =
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.DATABASE_URL_UNPOOLED ||
+    process.env.POSTGRES_URL_NON_POOLING ||
+    process.env.POSTGRES_URL_NO_SSL;
 
-db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-        user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        email TEXT NOT NULL UNIQUE,
-        phone TEXT NOT NULL,
-        password_hash TEXT NOT NULL,
-        role TEXT NOT NULL DEFAULT 'CUSTOMER'
-            CHECK (role IN ('ADMIN', 'VENDOR', 'CUSTOMER')),
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+if (!connectionString) {
+    throw new Error(
+        "Missing PostgreSQL connection string. " +
+        "Set DATABASE_URL (or POSTGRES_URL) in Vercel or your local .env file."
     );
-
-    CREATE TABLE IF NOT EXISTS vendor_applications (
-        application_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        name TEXT NOT NULL,
-        email TEXT NOT NULL,
-        phone TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'PENDING'
-            CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
-        submitted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(user_id)
-    );
-
-    CREATE TABLE IF NOT EXISTS vendors (
-        vendor_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL UNIQUE,
-        business_name TEXT NOT NULL,
-        location TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'ACTIVE'
-            CHECK (status IN ('ACTIVE', 'SUSPENDED')),
-        FOREIGN KEY (user_id) REFERENCES users(user_id)
-    );
-
-    CREATE TABLE IF NOT EXISTS vehicles (
-        vehicle_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        vendor_id INTEGER NOT NULL,
-        vehicle_type TEXT NOT NULL
-            CHECK (vehicle_type IN ('MOTORCYCLE', 'CAR')),
-        brand TEXT NOT NULL,
-        model TEXT NOT NULL,
-        segment TEXT NOT NULL,
-        price_per_day REAL NOT NULL CHECK (price_per_day >= 0),
-        location TEXT NOT NULL,
-        image_path TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'ACTIVE'
-            CHECK (status IN ('ACTIVE', 'INACTIVE')),
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (vendor_id) REFERENCES vendors(vendor_id)
-    );
-
-    CREATE TABLE IF NOT EXISTS bookings (
-        booking_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        customer_id INTEGER NOT NULL,
-        vehicle_id INTEGER NOT NULL,
-        pickup_datetime TEXT NOT NULL,
-        return_datetime TEXT NOT NULL,
-        total_price REAL NOT NULL CHECK (total_price >= 0),
-        status TEXT NOT NULL DEFAULT 'PENDING'
-            CHECK (status IN (
-                'PENDING', 'CONFIRMED', 'REJECTED',
-                'EXPIRED', 'CANCELLED', 'ACTIVE', 'COMPLETED'
-            )),
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (customer_id) REFERENCES users(user_id),
-        FOREIGN KEY (vehicle_id) REFERENCES vehicles(vehicle_id),
-        CHECK (return_datetime > pickup_datetime)
-    );
-`);
-
-// Safely add user_id to existing databases.
-const applicationColumns = db
-    .prepare("PRAGMA table_info(vendor_applications)")
-    .all()
-    .map(column => column.name);
-
-if (!applicationColumns.includes("user_id")) {
-    db.exec(`
-        ALTER TABLE vendor_applications
-        ADD COLUMN user_id INTEGER REFERENCES users(user_id)
-    `);
 }
 
-module.exports = db;
+// sql is a tagged-template query function; sql.query() accepts ($1, $2) placeholders
+const sql = neon(connectionString);
+
+/**
+ * Run a parameterised query and return all rows.
+ * @param {string} text   SQL with $1/$2/… placeholders
+ * @param {any[]}  params Parameter values
+ * @returns {Promise<any[]>}
+ */
+async function query(text, params = []) {
+    const rows = await sql.query(text, params);
+    // @neondatabase/serverless returns the rows array directly via sql.query()
+    return Array.isArray(rows) ? rows : (rows.rows ?? []);
+}
+
+/**
+ * Run a query and return the first row, or null.
+ */
+async function get(text, params = []) {
+    const rows = await query(text, params);
+    return rows[0] ?? null;
+}
+
+/**
+ * Run a DML statement (INSERT/UPDATE/DELETE) and return the pg result object.
+ * The result object has a `rowCount` property.
+ */
+async function run(text, params = []) {
+    // sql.query returns rows array for neon; wrap it to expose rowCount
+    // We need the raw result for rowCount — use a transaction client trick
+    const rows = await sql.query(text, params);
+    // For compatibility with rowCount checks, return a pg-like result
+    if (Array.isArray(rows)) {
+        return { rows, rowCount: rows.length };
+    }
+    return rows;
+}
+
+/**
+ * Execute multiple statements inside a single transaction.
+ * The callback receives a `client` object with `.query(text, params)`.
+ *
+ * With @neondatabase/serverless the transaction API uses neon's transaction() helper.
+ * @param {(client: { query: Function }) => Promise<any>} callback
+ */
+async function withTransaction(callback) {
+    // Build a transaction-compatible client wrapper
+    return sql.transaction(async (txClient) => {
+        // txClient from neon is already a tagged-template; wrap it so existing
+        // code that calls client.query(text, params) continues to work.
+        const client = {
+            async query(text, params = []) {
+                const rows = await txClient.query(text, params);
+                return Array.isArray(rows)
+                    ? { rows, rowCount: rows.length }
+                    : rows;
+            },
+        };
+        return callback(client);
+    });
+}
+
+/**
+ * Idempotent schema initialisation.
+ * Safe to run on every cold-start — all DDL uses IF NOT EXISTS / IF EXISTS.
+ */
+async function initializeDatabase() {
+    // --- Core tables ---
+    await query(`
+        CREATE TABLE IF NOT EXISTS users (
+            user_id      SERIAL PRIMARY KEY,
+            name         TEXT NOT NULL,
+            email        TEXT NOT NULL UNIQUE,
+            phone        TEXT,
+            password_hash TEXT NOT NULL,
+            role         TEXT NOT NULL DEFAULT 'CUSTOMER'
+                CHECK (role IN ('ADMIN', 'VENDOR', 'CUSTOMER')),
+            created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `);
+
+    await query(`
+        CREATE TABLE IF NOT EXISTS vendor_applications (
+            application_id SERIAL PRIMARY KEY,
+            user_id        INTEGER REFERENCES users(user_id),
+            name           TEXT NOT NULL,
+            email          TEXT NOT NULL,
+            phone          TEXT,
+            status         TEXT NOT NULL DEFAULT 'PENDING'
+                CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
+            submitted_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            reviewed_at    TIMESTAMPTZ
+        )
+    `);
+
+    await query(`
+        CREATE TABLE IF NOT EXISTS vendors (
+            vendor_id     SERIAL PRIMARY KEY,
+            user_id       INTEGER NOT NULL UNIQUE REFERENCES users(user_id),
+            business_name TEXT NOT NULL,
+            location      TEXT NOT NULL,
+            status        TEXT NOT NULL DEFAULT 'ACTIVE'
+                CHECK (status IN ('ACTIVE', 'SUSPENDED'))
+        )
+    `);
+
+    await query(`
+        CREATE TABLE IF NOT EXISTS vehicles (
+            vehicle_id    SERIAL PRIMARY KEY,
+            vendor_id     INTEGER NOT NULL REFERENCES vendors(vendor_id),
+            vehicle_type  TEXT NOT NULL CHECK (vehicle_type IN ('MOTORCYCLE', 'CAR')),
+            brand         TEXT NOT NULL,
+            model         TEXT NOT NULL,
+            segment       TEXT NOT NULL,
+            price_per_day DOUBLE PRECISION NOT NULL CHECK (price_per_day >= 0),
+            location      TEXT NOT NULL,
+            image_path    TEXT NOT NULL DEFAULT 'images/default-vehicle.jpg',
+            status        TEXT NOT NULL DEFAULT 'ACTIVE'
+                CHECK (status IN ('ACTIVE', 'INACTIVE')),
+            created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `);
+
+    await query(`
+        CREATE TABLE IF NOT EXISTS bookings (
+            booking_id      SERIAL PRIMARY KEY,
+            customer_id     INTEGER NOT NULL REFERENCES users(user_id),
+            vehicle_id      INTEGER NOT NULL REFERENCES vehicles(vehicle_id),
+            pickup_datetime  TIMESTAMPTZ NOT NULL,
+            return_datetime  TIMESTAMPTZ NOT NULL,
+            total_price     DOUBLE PRECISION NOT NULL CHECK (total_price >= 0),
+            status          TEXT NOT NULL DEFAULT 'PENDING'
+                CHECK (status IN (
+                    'PENDING', 'CONFIRMED', 'REJECTED',
+                    'EXPIRED', 'CANCELLED', 'ACTIVE', 'COMPLETED', 'ACCEPTED'
+                )),
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            CHECK (return_datetime > pickup_datetime)
+        )
+    `);
+
+    // --- Indexes (idempotent) ---
+    await query(`CREATE INDEX IF NOT EXISTS idx_vehicles_vendor  ON vehicles(vendor_id)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_vehicles_status  ON vehicles(status)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_bookings_customer ON bookings(customer_id)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_bookings_vehicle  ON bookings(vehicle_id)`);
+}
+
+module.exports = {
+    query,
+    get,
+    run,
+    withTransaction,
+    initializeDatabase,
+    /** Expose raw sql for ad-hoc use */
+    sql,
+};

@@ -1,20 +1,29 @@
 {
   "name": "bikerental",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "MOTORENT — Automobile rental platform",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js",
+    "dev": "node server.js",
+    "migrate:sqlite": "node scripts/migrate-sqlite-to-neon.js",
+    "test:db": "node scripts/test-db.js",
+    "lint": "node --check server.js && node --check database.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@neondatabase/serverless": "^1.2.0",
+    "@vercel/blob": "^2.8.2",
     "bcryptjs": "^3.0.3",
-    "better-sqlite3": "^13.0.3",
+    "dotenv": "^18.0.8",
     "express": "^5.2.1",
     "express-session": "^1.19.0",
     "multer": "^2.4.0"
+  },
+  "devDependencies": {
+    "better-sqlite3": "^13.0.3"
   }
 }

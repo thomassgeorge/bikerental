@@ -1,0 +1,7 @@
+.env
+node_modules/
+*.db
+*.db-shm
+*.db-wal
+server.new.js
+inspect_sqlite.js
