@@ -198,7 +198,7 @@ async function ensureVendorProfile(userId) {
     return vendor;
 }
 
-app.get("/api/health", async (req, res) => {
+app.get(["/api/health", "/health"], async (req, res) => {
     try {
         await db.get("SELECT 1 AS ok");
         res.json({ status: "ok", message: "MOTORENT server is running." });
@@ -206,6 +206,10 @@ app.get("/api/health", async (req, res) => {
         console.error("Health check failed:", error);
         res.status(500).json({ status: "error", message: "Database check failed." });
     }
+});
+
+app.get("/", (req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, "index.html"));
 });
 
 app.get("/api/auth/me", async (req, res) => {
