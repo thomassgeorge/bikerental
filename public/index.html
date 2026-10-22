@@ -482,18 +482,11 @@ function showToast(message) {
     toastTimer = setTimeout(() => toast.classList.remove('show'), 3000);
 }
 
-async function logout() {
-    try {
-        await api('/auth/logout', {method: 'POST'});
-        localStorage.removeItem('motorent_token');
-        currentUser = null;
-        updateNavigation();
-        $('bookingList').innerHTML = '';
-        showToast('Signed out successfully.');
-    } catch (error) {
-        localStorage.removeItem('motorent_token');
-        showToast(error.message);
-    }
+function logout() {
+    localStorage.removeItem('motorent_token');
+    currentUser = null;
+    fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => {});
+    window.location.replace('/');
 }
 
 $('authForm').addEventListener('submit', async event => {

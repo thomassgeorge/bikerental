@@ -417,18 +417,13 @@ app.post("/api/auth/login", async (req, res) => {
     res.json({ message: "Login successful.", user: req.session.user, token: req.session.token });
 });
 
-app.post("/api/auth/logout", (req, res) => {
-    if (!req.session) {
-        return res.json({ message: "Signed out." });
+app.all(["/api/auth/logout", "/auth/logout"], (req, res) => {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    if (req.session && typeof req.session.destroy === "function") {
+        req.session.destroy();
     }
-
-    req.session.destroy((error) => {
-        if (error) {
-            return res.status(500).json({ error: "Unable to sign out." });
-        }
-
-        res.json({ message: "Signed out successfully." });
-    });
+    res.clearCookie(SESSION_COOKIE, { path: "/" });
+    res.json({ message: "Signed out successfully." });
 });
 
 app.post("/api/vendor-applications", requireAuth, async (req, res) => {
