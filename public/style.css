@@ -1,0 +1,151 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background: #0a0a0a;
+    color: #ffffff;
+}
+
+nav {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    padding: 24px 6%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 10;
+    background: rgba(10, 10, 10, 0.75);
+}
+
+.logo {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 3px;
+}
+
+.nav-links {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+}
+
+.nav-links a {
+    color: #ffffff;
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.nav-links button,
+.hero-button {
+    background: #ffffff;
+    color: #000000;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 30px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.hero {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    padding: 120px 8%;
+    background:
+        linear-gradient(90deg, rgba(0,0,0,0.9), rgba(0,0,0,0.25)),
+        url("https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=2000&q=90")
+        center/cover;
+}
+
+.hero-content {
+    max-width: 650px;
+}
+
+.eyebrow {
+    font-size: 12px;
+    letter-spacing: 4px;
+    color: #aaa;
+    margin-bottom: 20px;
+}
+
+h1 {
+    font-size: clamp(60px, 9vw, 120px);
+    line-height: 0.9;
+    letter-spacing: -5px;
+    margin-bottom: 30px;
+}
+
+h1 span {
+    color: #aaa;
+}
+
+.hero-text {
+    max-width: 450px;
+    color: #bbb;
+    font-size: 18px;
+    line-height: 1.6;
+    margin-bottom: 35px;
+}
+
+.bikes-section {
+    padding: 120px 8%;
+}
+
+.section-heading {
+    margin-bottom: 50px;
+}
+
+.section-heading h2 {
+    font-size: clamp(40px, 6vw, 75px);
+    letter-spacing: -3px;
+}
+
+.bike-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 25px;
+}
+
+.bike-card {
+    background: #151515;
+    border-radius: 20px;
+    overflow: hidden;
+    padding: 25px;
+}
+
+.bike-card h3 {
+    font-size: 25px;
+    margin-bottom: 8px;
+}
+
+.bike-card p {
+    color: #999;
+}
+
+@media (max-width: 700px) {
+    .nav-links a {
+        display: none;
+    }
+
+    nav {
+        padding: 20px;
+    }
+
+    .hero {
+        padding: 120px 25px 60px;
+    }
+
+    .bikes-section {
+        padding: 80px 25px;
+    }
+}

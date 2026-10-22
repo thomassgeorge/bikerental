@@ -1,0 +1,380 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Motorent — Vendor Dashboard</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#090909;color:#f5f5f5;font-family:Arial,sans-serif}
+main{max-width:1150px;margin:auto;padding:40px 22px}
+.eyebrow{color:#aaa;letter-spacing:4px;font-size:12px}
+h1{font-size:clamp(36px,6vw,60px);letter-spacing:-2px;margin:16px 0}
+h2{margin-top:42px}
+p{line-height:1.6}
+.muted{color:#aaa;font-size:14px}
+.panel,.card{background:#141414;border:1px solid #333;border-radius:12px;padding:20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:15px}
+input,select{display:block;width:100%;padding:12px;margin:7px 0 15px;background:#090909;color:white;border:1px solid #444;border-radius:6px}
+label{font-size:14px}
+button{padding:11px 15px;margin:5px 5px 5px 0;border:0;border-radius:6px;background:white;color:#111;font-weight:bold;cursor:pointer}
+.secondary{background:#333;color:white}
+.danger{background:#782e2e;color:white}
+button:disabled{opacity:.5;cursor:wait}
+img{width:100%;height:180px;object-fit:cover;border-radius:8px}
+.hidden{display:none!important}
+.message{padding:12px;margin:15px 0;border-radius:6px;white-space:pre-wrap}
+.error{background:#421f1f;color:#ffd0d0}
+.success{background:#173b29;color:#c7ffda}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<main>
+<div class="eyebrow">MOTORENT / VENDOR PORTAL</div>
+<h1>Manage your fleet.</h1>
+<div id="message" class="hidden message"></div>
+
+<section id="loginPanel" class="panel">
+<h2 style="margin-top:0">Vendor login</h2>
+<form id="loginForm">
+<label>Email</label>
+<input name="email" type="email" required>
+<label>Password</label>
+<input name="password" type="password" required>
+<button type="submit">Log in</button>
+</form>
+</section>
+
+<section id="dashboard" class="hidden">
+<div class="top">
+<p id="welcome" class="muted"></p>
+<button id="logout" class="secondary">Log out</button>
+</div>
+
+<h2 id="formTitle">Add a vehicle</h2>
+<form id="vehicleForm" class="panel" enctype="multipart/form-data">
+<input type="hidden" id="vehicleId">
+
+<label for="type">Vehicle type</label>
+<select id="type" required>
+<option value="MOTORCYCLE">Motorcycle</option>
+<option value="CAR">Car</option>
+</select>
+
+<label for="segment">Segment</label>
+<select id="segment" required></select>
+
+<label for="brand">Brand</label>
+<input id="brand" maxlength="100" required placeholder="e.g. KTM">
+
+<label for="model">Model</label>
+<input id="model" maxlength="100" required placeholder="e.g. Duke 390">
+
+<label for="price">Rental price per day (₹)</label>
+<input id="price" type="number" min="0" max="10000000" step="1" required>
+
+<label for="location">Pickup location</label>
+<input id="location" maxlength="100" required placeholder="e.g. Kochi, Kerala">
+
+<label for="photo">Vehicle photograph (JPG, PNG or WebP, max 5 MB)</label>
+<input id="photo" type="file" accept="image/jpeg,image/png,image/webp">
+
+<p id="photoHint" class="muted">A photo is required when adding a vehicle. When editing, leave it blank to keep the existing photo.</p>
+<button type="submit" id="saveButton">Add vehicle</button>
+<button type="button" id="cancelEdit" class="secondary hidden">Cancel edit</button>
+</form>
+
+<h2>Your vehicles</h2>
+<div id="vehicleList" class="grid"></div>
+
+<h2>Booking requests</h2>
+<p class="muted">Customer contact details are shown for bookings associated with your vehicles.</p>
+<div id="bookingList" class="grid"></div>
+</section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+
+const segments = {
+ MOTORCYCLE:["Naked / Street","Sport","Cruiser","Adventure / Tourer","Scooter"],
+ CAR:["Hatchback","Sedan","SUV","Luxury"]
+};
+
+let currentVehicles = [];
+
+function message(text,error=false){
+ const el=$("message");
+ el.textContent=text;
+ el.className="message "+(error?"error":"success");
+}
+
+async function api(url,options={}){
+ const response=await fetch(url,{
+  credentials:"same-origin",
+  ...options
+ });
+ const data=await response.json().catch(()=>({}));
+ if(!response.ok) throw new Error(data.error||"Request failed.");
+ return data;
+}
+
+function updateSegments(selected){
+ const options=segments[$("type").value];
+ $("segment").replaceChildren();
+ options.forEach(value=>{
+  const option=document.createElement("option");
+  option.value=value;
+  option.textContent=value;
+  if(value===selected) option.selected=true;
+  $("segment").appendChild(option);
+ });
+}
+
+$("type").addEventListener("change",()=>updateSegments());
+
+function button(text,callback,className=""){
+ const el=document.createElement("button");
+ el.type="button";
+ el.textContent=text;
+ el.className=className;
+ el.addEventListener("click",callback);
+ return el;
+}
+
+function card(title,details){
+ const el=document.createElement("article");
+ el.className="card";
+ const h=document.createElement("h3");
+ h.textContent=title;
+ const p=document.createElement("p");
+ p.className="muted";
+ p.style.whiteSpace="pre-line";
+ p.textContent=details;
+ el.append(h,p);
+ return el;
+}
+
+async function loadVehicles(){
+ currentVehicles=await api("/api/vendor/vehicles");
+ const list=$("vehicleList");
+ list.replaceChildren();
+
+ if(!currentVehicles.length){
+  list.textContent="You haven't added any vehicles yet.";
+  return;
+ }
+
+ currentVehicles.forEach(v=>{
+  const item=card(v.brand+" "+v.model,
+   "Type: "+v.vehicle_type+
+   "\nSegment: "+v.segment+
+   "\nPrice/day: ₹"+v.price_per_day+
+   "\nLocation: "+v.location+
+   "\nStatus: "+v.status);
+
+  const img=document.createElement("img");
+  img.src="/"+v.image_path;
+  img.alt=v.brand+" "+v.model;
+  item.prepend(img);
+
+  item.appendChild(button("Edit",()=>startEdit(v)));
+  if(v.status==="ACTIVE"){
+   item.appendChild(button("Remove listing",()=>removeVehicle(v),"danger"));
+  }else{
+   item.appendChild(document.createTextNode("This listing is inactive."));
+  }
+
+  list.appendChild(item);
+ });
+}
+
+function startEdit(v){
+ $("vehicleId").value=v.vehicle_id;
+ $("type").value=v.vehicle_type;
+ updateSegments(v.segment);
+ $("brand").value=v.brand;
+ $("model").value=v.model;
+ $("price").value=v.price_per_day;
+ $("location").value=v.location;
+ $("photo").value="";
+ $("photo").required=false;
+ $("formTitle").textContent="Edit vehicle";
+ $("saveButton").textContent="Save changes";
+ $("cancelEdit").classList.remove("hidden");
+ window.scrollTo({top:0,behavior:"smooth"});
+}
+
+function resetForm(){
+ $("vehicleForm").reset();
+ $("vehicleId").value="";
+ $("photo").required=true;
+ $("formTitle").textContent="Add a vehicle";
+ $("saveButton").textContent="Add vehicle";
+ $("cancelEdit").classList.add("hidden");
+ updateSegments();
+}
+
+$("cancelEdit").addEventListener("click",resetForm);
+
+$("vehicleForm").addEventListener("submit",async event=>{
+ event.preventDefault();
+ const id=$("vehicleId").value;
+ const photo=$("photo").files[0];
+
+ if(!id&&!photo){
+  message("Choose a vehicle photograph.",true);
+  return;
+ }
+
+ const formData=new FormData();
+ formData.append("vehicle_type",$("type").value);
+ formData.append("segment",$("segment").value);
+ formData.append("brand",$("brand").value.trim());
+ formData.append("model",$("model").value.trim());
+ formData.append("price_per_day",$("price").value);
+ formData.append("location",$("location").value.trim());
+ if(photo) formData.append("image",photo);
+
+ $("saveButton").disabled=true;
+ try{
+  if(id){
+   await api("/api/vendor/vehicles/"+id,{
+    method:"PUT",
+    body:formData
+   });
+   message("Vehicle updated successfully.");
+  }else{
+   await api("/api/vendor/vehicles",{
+    method:"POST",
+    body:formData
+   });
+   message("Vehicle added successfully.");
+  }
+
+  resetForm();
+  await loadVehicles();
+ }catch(error){
+  message(error.message,true);
+ }finally{
+  $("saveButton").disabled=false;
+ }
+});
+
+async function removeVehicle(v){
+ if(!confirm("Remove "+v.brand+" "+v.model+" from public listings?"))return;
+ try{
+  await api("/api/vendor/vehicles/"+v.vehicle_id,{method:"DELETE"});
+  message("Vehicle removed from public listings.");
+  await loadVehicles();
+ }catch(error){
+  message(error.message,true);
+ }
+}
+
+async function loadBookings(){
+ const list=await api("/api/vendor/bookings");
+ const container=$("bookingList");
+ container.replaceChildren();
+
+ if(!list.length){
+  container.textContent="No booking requests yet.";
+  return;
+ }
+
+ list.forEach(b=>{
+  const item=card(
+   "Booking #"+b.booking_id+" — "+b.brand+" "+b.model,
+   "Customer: "+b.customer_name+
+   "\nPhone: "+b.customer_phone+
+   "\nEmail: "+b.customer_email+
+   "\nPickup: "+b.pickup_datetime+
+   "\nReturn: "+b.return_datetime+
+   "\nEstimated total: ₹"+b.total_price+
+   "\nStatus: "+b.status
+  );
+
+  if(b.status==="PENDING"){
+   item.appendChild(button("Accept booking",async()=>{
+    await respond(b.booking_id,"CONFIRMED");
+   }));
+   item.appendChild(button("Reject",async()=>{
+    await respond(b.booking_id,"REJECTED");
+   },"danger"));
+  }
+
+  container.appendChild(item);
+ });
+}
+
+async function respond(id,decision){
+ try{
+  await api("/api/vendor/bookings/"+id+"/respond",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({decision})
+  });
+  message(decision==="CONFIRMED"?
+   "Booking confirmed. Contact the customer to arrange pickup and payment.":
+   "Booking rejected.");
+  await loadBookings();
+ }catch(error){
+  message(error.message,true);
+ }
+}
+
+async function showDashboard(){
+ $("loginPanel").classList.add("hidden");
+ $("dashboard").classList.remove("hidden");
+ const result=await api("/api/auth/me");
+ $("welcome").textContent="Signed in as "+result.user.email;
+ await Promise.all([loadVehicles(),loadBookings()]);
+}
+
+$("loginForm").addEventListener("submit",async event=>{
+ event.preventDefault();
+ const form=new FormData(event.currentTarget);
+ try{
+  const result=await api("/api/auth/login",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({
+    email:form.get("email"),
+    password:form.get("password")
+   })
+  });
+
+  if(result.user.role!=="VENDOR"){
+   await api("/api/auth/logout",{method:"POST"});
+   throw new Error("This login is not an approved vendor account.");
+  }
+
+  message("Login successful.");
+  await showDashboard();
+ }catch(error){
+  message(error.message,true);
+ }
+});
+
+$("logout").addEventListener("click",async()=>{
+ try{
+  await api("/api/auth/logout",{method:"POST"});
+  location.reload();
+ }catch(error){
+  message(error.message,true);
+ }
+});
+
+updateSegments();
+$("photo").required=true;
+
+api("/api/auth/me").then(async result=>{
+ if(result.user&&result.user.role==="VENDOR"){
+  await showDashboard();
+ }
+}).catch(()=>{});
+</script>
+</body>
+</html>

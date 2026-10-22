@@ -1,0 +1,291 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Motorent — Admin</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body { background:#090909; color:#f5f5f5; font-family:Arial,sans-serif; margin:0; }
+        .wrap { max-width:1150px; margin:auto; padding:48px 24px; }
+        h1 { font-size:clamp(36px,6vw,64px); letter-spacing:-2px; margin:12px 0 32px; }
+        h2 { margin-top:48px; }
+        .eyebrow { color:#aaa; letter-spacing:4px; font-size:12px; text-transform:uppercase; }
+        .panel { background:#141414; border:1px solid #303030; border-radius:12px; padding:22px; margin:20px 0; }
+        input, select { background:#090909; color:white; border:1px solid #444; padding:12px; border-radius:6px; margin:5px; max-width:100%; }
+        button { padding:11px 16px; border:0; border-radius:6px; cursor:pointer; background:#f5f5f5; color:#111; font-weight:bold; margin:4px; }
+        button.danger { background:#782e2e; color:white; }
+        button.secondary { background:#333; color:white; }
+        .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px; }
+        .card { border:1px solid #333; border-radius:10px; padding:18px; overflow-wrap:anywhere; }
+        .muted { color:#aaa; font-size:14px; }
+        .status { color:#d9c28b; font-size:13px; }
+        .hidden { display:none !important; }
+        .message { padding:12px; border-radius:6px; margin:12px 0; white-space:pre-wrap; }
+        .error { background:#421f1f; color:#ffcece; }
+        .success { background:#173b29; color:#c7ffda; }
+        img { width:100%; max-height:190px; object-fit:cover; border-radius:8px; }
+        label { display:block; margin-top:12px; font-size:14px; }
+        .topbar { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+    </style>
+</head>
+<body>
+<main class="wrap">
+    <div class="eyebrow">MOTORENT / ADMINISTRATION</div>
+    <h1>Platform control.</h1>
+    <div id="message" class="hidden message"></div>
+
+    <section id="loginPanel" class="panel">
+        <h2 style="margin-top:0">Administrator login</h2>
+        <form id="loginForm">
+            <label>Email</label>
+            <input name="email" type="email" value="admin@bikerental.local" required>
+            <label>Password</label>
+            <input name="password" type="password" required>
+            <button type="submit">Log in</button>
+        </form>
+        <p class="muted">Local development credentials are shown in your server terminal.</p>
+    </section>
+
+    <section id="dashboard" class="hidden">
+        <div class="topbar">
+            <p id="welcome" class="muted"></p>
+            <button id="logout" class="secondary">Log out</button>
+        </div>
+
+        <h2>Vendor applications</h2>
+        <p class="muted">Review applicants and create vendor accounts only after approval.</p>
+        <div id="applications" class="grid"></div>
+
+        <h2>Vehicle inventory</h2>
+        <div id="vehicles" class="grid"></div>
+
+        <h2>Booking requests</h2>
+        <div id="bookings" class="grid"></div>
+    </section>
+</main>
+
+<script>
+const $ = selector => document.querySelector(selector);
+
+function showMessage(text, isError = false) {
+    const el = $("#message");
+    el.textContent = text;
+    el.className = "message " + (isError ? "error" : "success");
+    el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+async function api(url, options = {}) {
+    const response = await fetch(url, {
+        credentials: "same-origin",
+        ...options,
+        headers: {
+            ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
+            ...(options.headers || {})
+        }
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "Request failed.");
+    return data;
+}
+
+function makeCard(title, details, actions = []) {
+    const card = document.createElement("article");
+    card.className = "card";
+
+    const heading = document.createElement("h3");
+    heading.textContent = title;
+    card.appendChild(heading);
+
+    const text = document.createElement("p");
+    text.className = "muted";
+    text.style.whiteSpace = "pre-line";
+    text.textContent = details;
+    card.appendChild(text);
+
+    actions.forEach(action => card.appendChild(action));
+    return card;
+}
+
+function makeButton(label, callback, className = "") {
+    const button = document.createElement("button");
+    button.textContent = label;
+    button.className = className;
+    button.addEventListener("click", callback);
+    return button;
+}
+
+async function loadApplications() {
+    const list = await api("/api/admin/vendor-applications");
+    const container = $("#applications");
+    container.replaceChildren();
+
+    if (!list.length) {
+        container.textContent = "No vendor applications yet.";
+        return;
+    }
+
+    list.forEach(item => {
+        const card = makeCard(
+            item.name,
+            `Email: ${item.email}\nPhone: ${item.phone}\nStatus: ${item.status}\nSubmitted: ${item.submitted_at}`
+        );
+
+        if (item.status === "PENDING") {
+            card.appendChild(makeButton("Approve vendor", () => approveVendor(item)));
+            card.appendChild(makeButton("Reject", async () => {
+                if (!confirm(`Reject ${item.name}'s application?`)) return;
+                try {
+                    await api(`/api/admin/vendor-applications/${item.application_id}/reject`, {
+                        method: "POST",
+                        body: JSON.stringify({})
+                    });
+                    showMessage("Application rejected.");
+                    await refreshDashboard();
+                } catch (error) {
+                    showMessage(error.message, true);
+                }
+            }, "danger"));
+        }
+
+        container.appendChild(card);
+    });
+}
+
+async function approveVendor(item) {
+    const businessName = prompt("Business name for " + item.name + ":");
+    if (!businessName || !businessName.trim()) return;
+
+    const location = prompt("Business pickup location:");
+    if (!location || !location.trim()) return;
+
+    const password = prompt("Set a temporary vendor password (minimum 8 characters):");
+    if (!password) return;
+
+    try {
+        await api(`/api/admin/vendor-applications/${item.application_id}/approve`, {
+            method: "POST",
+            body: JSON.stringify({
+                business_name: businessName.trim(),
+                location: location.trim(),
+                password
+            })
+        });
+
+        showMessage("Vendor approved. Share the temporary login details securely.");
+        await refreshDashboard();
+    } catch (error) {
+        showMessage(error.message, true);
+    }
+}
+
+async function loadVehicles() {
+    const list = await api("/api/admin/vehicles");
+    const container = $("#vehicles");
+    container.replaceChildren();
+
+    if (!list.length) {
+        container.textContent = "No vehicles listed yet.";
+        return;
+    }
+
+    list.forEach(item => {
+        const card = makeCard(
+            `${item.brand} ${item.model}`,
+            `Type: ${item.vehicle_type}\nSegment: ${item.segment}\nPrice/day: ₹${item.price_per_day}\nLocation: ${item.location}\nVendor: ${item.business_name}\nStatus: ${item.status}`
+        );
+
+        if (item.image_path) {
+            const image = document.createElement("img");
+            image.src = "/" + item.image_path;
+            image.alt = `${item.brand} ${item.model}`;
+            card.prepend(image);
+        }
+
+        container.appendChild(card);
+    });
+}
+
+async function loadBookings() {
+    const list = await api("/api/admin/bookings");
+    const container = $("#bookings");
+    container.replaceChildren();
+
+    if (!list.length) {
+        container.textContent = "No booking requests yet.";
+        return;
+    }
+
+    list.forEach(item => {
+        container.appendChild(makeCard(
+            `Booking #${item.booking_id} — ${item.brand} ${item.model}`,
+            `Customer: ${item.customer_name}\nEmail: ${item.customer_email}\nVendor: ${item.business_name}\nPickup: ${item.pickup_datetime}\nReturn: ${item.return_datetime}\nEstimated total: ₹${item.total_price}\nStatus: ${item.status}`
+        ));
+    });
+}
+
+async function refreshDashboard() {
+    await Promise.all([
+        loadApplications(),
+        loadVehicles(),
+        loadBookings()
+    ]);
+}
+
+async function checkSession() {
+    try {
+        const result = await api("/api/auth/me");
+
+        if (result.user && result.user.role === "ADMIN") {
+            $("#loginPanel").classList.add("hidden");
+            $("#dashboard").classList.remove("hidden");
+            $("#welcome").textContent = "Signed in as " + result.user.email;
+            await refreshDashboard();
+        } else {
+            $("#loginPanel").classList.remove("hidden");
+            $("#dashboard").classList.add("hidden");
+        }
+    } catch {
+        $("#loginPanel").classList.remove("hidden");
+        $("#dashboard").classList.add("hidden");
+    }
+}
+
+$("#loginForm").addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+
+    try {
+        await api("/api/auth/login", {
+            method: "POST",
+            body: JSON.stringify({
+                email: form.get("email"),
+                password: form.get("password")
+            })
+        });
+
+        showMessage("Login successful.");
+        await checkSession();
+    } catch (error) {
+        showMessage(error.message, true);
+    }
+});
+
+$("#logout").addEventListener("click", async () => {
+    try {
+        await api("/api/auth/logout", {
+            method: "POST",
+            body: JSON.stringify({})
+        });
+        location.reload();
+    } catch (error) {
+        showMessage(error.message, true);
+    }
+});
+
+checkSession();
+</script>
+</body>
+</html>

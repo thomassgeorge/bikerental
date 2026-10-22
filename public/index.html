@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MOTORENT — Find Your Next Ride</title>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
+
+:root {
+    --bg: #0b0b0b;
+    --surface: #121212;
+    --surface-2: #181818;
+    --border: #292929;
+    --text: #f5f5f5;
+    --muted: #929292;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; scroll-padding-top: 90px; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; line-height: 1.6; }
+button, input, select { font: inherit; }
+button, a { -webkit-tap-highlight-color: transparent; }
+a { color: inherit; text-decoration: none; }
+button { cursor: pointer; }
+
+.container { width: min(1160px, calc(100% - 48px)); margin: 0 auto; }
+
+header { position: sticky; top: 0; z-index: 20; background: rgba(11,11,11,.94); backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); }
+.navbar { min-height: 76px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.logo { font-family: 'Manrope', sans-serif; font-size: 23px; font-weight: 800; letter-spacing: -1.2px; }
+.logo span { color: #858585; }
+.nav-links, .nav-actions { display: flex; align-items: center; gap: 24px; }
+.nav-links a { color: #bdbdbd; font-size: 13px; }
+.nav-links a:hover { color: white; }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 19px; border: 1px solid transparent; border-radius: 5px; font-size: 13px; font-weight: 700; }
+.btn-light { color: #111; background: white; }
+.btn-light:hover { background: #dedede; }
+.btn-outline { color: white; border-color: #383838; background: transparent; }
+.btn-outline:hover { border-color: #888; background: #171717; }
+.btn-small { min-height: 38px; padding: 0 14px; }
+
+.hero { padding: 100px 0 76px; border-bottom: 1px solid var(--border); }
+.eyebrow { color: #a7a7a7; font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 24px; }
+.hero h1 { max-width: 760px; font-family: 'Manrope', sans-serif; font-size: clamp(44px, 7vw, 76px); line-height: 1.06; letter-spacing: -4px; font-weight: 800; }
+.hero h1 span { color: #888; }
+.hero-description { max-width: 470px; color: var(--muted); font-size: 15px; margin-top: 24px; }
+.hero-actions { display: flex; gap: 12px; margin-top: 32px; flex-wrap: wrap; }
+.hero-bottom { display: flex; flex-wrap: wrap; gap: 32px; margin-top: 68px; padding-top: 24px; border-top: 1px solid var(--border); }
+.hero-stat { display: flex; flex-direction: column; gap: 2px; }
+.hero-stat strong { font-size: 13px; }
+.hero-stat span { color: var(--muted); font-size: 12px; }
+
+.search-section { padding: 28px 0; border-bottom: 1px solid var(--border); }
+.search-box { display: grid; grid-template-columns: 1fr 1fr 1fr auto; align-items: end; gap: 13px; }
+.field { display: flex; flex-direction: column; gap: 7px; }
+.field label { color: #aaa; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
+.field input, .field select { width: 100%; min-height: 44px; padding: 0 11px; color: white; background: #151515; border: 1px solid #333; border-radius: 4px; outline: none; }
+.field input:focus, .field select:focus { border-color: #888; }
+
+.vehicles-section { padding: 75px 0 85px; }
+.section-heading { margin-bottom: 26px; }
+.section-heading h2 { font: 800 clamp(27px,4vw,38px)/1.2 'Manrope',sans-serif; letter-spacing: -1.3px; }
+.section-heading p { margin-top: 8px; color: var(--muted); font-size: 13px; }
+.tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+.tab { min-height: 37px; padding: 0 15px; color: #aaa; background: transparent; border: 1px solid #333; border-radius: 4px; font-size: 12px; font-weight: 700; }
+.tab.active { color: #111; background: white; border-color: white; }
+.filters { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; margin-bottom: 22px; }
+.filters input, .filters select { min-height: 38px; padding: 0 10px; color: #ddd; background: #131313; border: 1px solid #333; border-radius: 4px; font-size: 12px; outline: none; }
+.filters input { width: 210px; }
+#resultsCount { margin-left: auto; color: var(--muted); font-size: 12px; }
+.vehicle-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 18px; }
+.vehicle-card { overflow: hidden; background: var(--surface); border: 1px solid var(--border); border-radius: 5px; transition: border-color .2s,transform .2s; }
+.vehicle-card:hover { border-color: #555; transform: translateY(-2px); }
+.vehicle-image { height: 205px; position: relative; background: #191919; overflow: hidden; }
+.vehicle-image img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.vehicle-type { position: absolute; top: 11px; left: 11px; padding: 4px 8px; color: white; background: rgba(0,0,0,.8); border: 1px solid #444; border-radius: 3px; font-size: 10px; text-transform: uppercase; }
+.vehicle-info { padding: 17px; }
+.vehicle-category { color: #999; font-size: 11px; }
+.vehicle-name { margin-top: 3px; font: 800 19px 'Manrope',sans-serif; line-height: 1.35; overflow-wrap: anywhere; }
+.vehicle-location { margin-top: 8px; color: #999; font-size: 12px; }
+.vehicle-bottom { display: flex; align-items: end; justify-content: space-between; gap: 10px; padding-top: 16px; margin-top: 16px; border-top: 1px solid var(--border); }
+.vehicle-price strong { display: block; font: 800 20px 'Manrope',sans-serif; }
+.vehicle-price span { color: #999; font-size: 11px; }
+.empty-state { grid-column: 1/-1; padding: 45px 18px; text-align: center; border: 1px dashed #383838; border-radius: 5px; }
+.empty-state h3 { margin-bottom: 7px; font-size: 18px; }
+.empty-state p { color: var(--muted); font-size: 13px; }
+
+.how-section { padding: 70px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.steps { display: grid; grid-template-columns: repeat(3,1fr); gap: 18px; margin-top: 28px; }
+.step { padding: 23px; background: #111; border: 1px solid var(--border); border-radius: 4px; }
+.step-number { color: #888; font-size: 11px; font-weight: 700; }
+.step h3 { margin-top: 15px; font: 800 18px 'Manrope',sans-serif; }
+.step p { margin-top: 8px; color: var(--muted); font-size: 13px; }
+
+.bookings-section { display: none; padding: 65px 0; border-bottom: 1px solid var(--border); }
+.booking-list { display: grid; gap: 12px; margin-top: 20px; }
+.booking-item { display: flex; justify-content: space-between; align-items: center; gap: 18px; padding: 19px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; }
+.booking-item h3 { font-size: 14px; }
+.booking-item p { margin-top: 5px; color: #999; font-size: 12px; }
+.booking-status { display: inline-block; margin-top: 8px; padding: 3px 8px; background: #292929; border-radius: 3px; font-size: 10px; font-weight: 700; }
+
+.vendor-section { padding: 55px 0; }
+.vendor-inner { display: flex; justify-content: space-between; align-items: center; gap: 22px; padding: 29px; background: #121212; border: 1px solid var(--border); border-radius: 5px; }
+.vendor-inner h2 { font: 800 24px 'Manrope',sans-serif; }
+.vendor-inner p { margin-top: 7px; color: var(--muted); font-size: 13px; }
+footer { padding: 25px 0; border-top: 1px solid var(--border); }
+.footer-inner { display: flex; justify-content: space-between; align-items: center; gap: 18px; }
+.footer-copy,.footer-links { color: #999; font-size: 11px; }
+.footer-links { display: flex; gap: 17px; }
+
+.modal { display: none; position: fixed; inset: 0; z-index: 100; align-items: center; justify-content: center; padding: 18px; background: rgba(0,0,0,.82); overflow-y: auto; }
+.modal.open { display: flex; }
+.modal-panel { position: relative; width: min(430px,100%); max-height: 90vh; overflow-y: auto; padding: 28px; background: #111; border: 1px solid #383838; border-radius: 5px; }
+.modal-close { position: absolute; top: 8px; right: 13px; color: white; background: none; border: none; font-size: 27px; }
+.modal-panel h2 { font: 800 25px 'Manrope',sans-serif; }
+.modal-subtitle { margin: 7px 0 20px; color: #999; font-size: 12px; }
+.modal-form { display: grid; gap: 14px; }
+.modal-form .btn { width: 100%; }
+.form-message { display: none; margin: 12px 0; padding: 10px; background: #202020; border: 1px solid #444; border-radius: 4px; font-size: 12px; overflow-wrap: anywhere; }
+.form-switch { margin-top: 18px; color: #aaa; font-size: 12px; text-align: center; }
+.text-button { color: white; background: none; border: none; text-decoration: underline; }
+.booking-dates { display: grid; gap: 13px; margin: 20px 0; }
+.toast { position: fixed; z-index: 200; bottom: 20px; right: 20px; max-width: calc(100% - 40px); padding: 13px 17px; color: white; background: #222; border: 1px solid #444; border-radius: 4px; font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .2s; }
+.toast.show { opacity: 1; }
+
+@media(max-width:850px) {
+    .navbar { flex-wrap: wrap; padding: 12px 0; }
+    .nav-links { gap: 14px; }
+    .search-box { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    .vehicle-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media(max-width:600px) {
+    .container { width: calc(100% - 30px); }
+    .navbar { gap: 10px; }
+    .logo { font-size: 20px; }
+    .nav-links { order: 3; width: 100%; overflow-x: auto; padding: 5px 0; }
+    .nav-links a { white-space: nowrap; font-size: 12px; }
+    .nav-actions { gap: 6px; }
+    .nav-actions .btn { min-height: 34px; padding: 0 9px; font-size: 11px; }
+    .hero { padding: 62px 0 42px; }
+    .hero h1 { font-size: clamp(42px,12vw,60px); letter-spacing: -2px; }
+    .hero-description { font-size: 14px; }
+    .hero-bottom { gap: 20px; margin-top: 42px; }
+    .search-box { grid-template-columns: 1fr; }
+    .vehicles-section { padding: 55px 0; }
+    .vehicle-grid { grid-template-columns: 1fr; }
+    .vehicle-image { height: 225px; }
+    .filters input { width: 100%; }
+    #resultsCount { width: 100%; margin-left: 0; }
+    .steps { grid-template-columns: 1fr; gap: 12px; }
+    .vendor-inner { align-items: flex-start; flex-direction: column; padding: 22px; }
+    .booking-item { align-items: flex-start; flex-direction: column; }
+    .footer-inner { align-items: flex-start; flex-direction: column; }
+    .modal-panel { padding: 24px 19px; }
+}
+</style>
+</head>
+
+<body>
+<header>
+    <div class="container navbar">
+        <a href="/" class="logo">MOTO<span>RENT</span></a>
+        <nav class="nav-links">
+            <a href="#vehicles" onclick="setCategory('MOTORCYCLE')">Motorcycles</a>
+            <a href="#vehicles" onclick="setCategory('CAR')">Cars</a>
+            <a href="#how-it-works">How it works</a>
+            <a href="#vendor">List your vehicle</a>
+        </nav>
+        <div class="nav-actions">
+            <button class="btn btn-outline btn-small" id="loginNav" onclick="openAuth('login')">Sign in</button>
+            <button class="btn btn-light btn-small" id="registerNav" onclick="openAuth('register')">Get started</button>
+            <button class="btn btn-outline btn-small" id="logoutNav" onclick="logout()" style="display:none">Sign out</button>
+        </div>
+    </div>
+</header>
+
+<main>
+<section class="hero">
+    <div class="container">
+        <div class="eyebrow">Your ride. Your choice.</div>
+        <h1>Find your next <span>ride.</span></h1>
+        <p class="hero-description">From everyday commutes to weekend drives. Discover cars and motorcycles available to rent near you.</p>
+        <div class="hero-actions">
+            <a class="btn btn-light" href="#vehicles">Explore vehicles →</a>
+            <a class="btn btn-outline" href="#how-it-works">How it works</a>
+        </div>
+        <div class="hero-bottom">
+            <div class="hero-stat"><strong>Cars & bikes</strong><span>One place for both</span></div>
+            <div class="hero-stat"><strong>Local rentals</strong><span>Explore nearby options</span></div>
+            <div class="hero-stat"><strong>Direct contact</strong><span>Coordinate with the owner</span></div>
+        </div>
+    </div>
+</section>
+
+<section class="search-section">
+    <div class="container">
+        <form class="search-box" id="searchForm">
+            <div class="field">
+                <label for="searchCategory">Vehicle type</label>
+                <select id="searchCategory">
+                    <option value="ALL">All vehicles</option>
+                    <option value="MOTORCYCLE">Motorcycles</option>
+                    <option value="CAR">Cars</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="searchLocation">Location</label>
+                <input id="searchLocation" placeholder="e.g. Kochi">
+            </div>
+            <div class="field">
+                <label for="searchDates">Pickup date</label>
+                <input id="searchDates" type="date">
+            </div>
+            <button class="btn btn-light" type="submit">Search</button>
+        </form>
+    </div>
+</section>
+
+<section class="vehicles-section" id="vehicles">
+    <div class="container">
+        <div class="section-heading">
+            <h2>Explore vehicles.</h2>
+            <p>Find the right vehicle for your next journey.</p>
+        </div>
+        <div class="tabs">
+            <button class="tab active" data-category="ALL" onclick="setCategory('ALL')">All vehicles</button>
+            <button class="tab" data-category="MOTORCYCLE" onclick="setCategory('MOTORCYCLE')">Motorcycles</button>
+            <button class="tab" data-category="CAR" onclick="setCategory('CAR')">Cars</button>
+        </div>
+        <div class="filters">
+            <select id="segmentFilter" aria-label="Vehicle category"><option value="">All categories</option></select>
+            <select id="sortFilter" aria-label="Sort by price">
+                <option value="default">Recommended</option>
+                <option value="low">Price: low to high</option>
+                <option value="high">Price: high to low</option>
+            </select>
+            <input id="vehicleSearch" type="search" placeholder="Search vehicles">
+            <span id="resultsCount">Loading...</span>
+        </div>
+        <div class="vehicle-grid" id="vehicleGrid">
+            <div class="empty-state"><h3>Loading vehicles...</h3><p>Please wait.</p></div>
+        </div>
+    </div>
+</section>
+
+<section class="how-section" id="how-it-works">
+    <div class="container">
+        <div class="section-heading">
+            <h2>Simple by design.</h2>
+            <p>Three steps from browsing to booking.</p>
+        </div>
+        <div class="steps">
+            <div class="step"><span class="step-number">01 / EXPLORE</span><h3>Find your vehicle</h3><p>Browse cars and motorcycles, compare rates, and choose your ride.</p></div>
+            <div class="step"><span class="step-number">02 / REQUEST</span><h3>Send a request</h3><p>Select your rental dates and submit a request to the owner.</p></div>
+            <div class="step"><span class="step-number">03 / CONFIRM</span><h3>Coordinate directly</h3><p>Contact the owner to arrange rental details and payment.</p></div>
+        </div>
+    </div>
+</section>
+
+<section class="bookings-section" id="myBookings">
+    <div class="container">
+        <div class="section-heading"><h2>Your bookings.</h2><p>Check the status of your rental requests.</p></div>
+        <div class="booking-list" id="bookingList"></div>
+    </div>
+</section>
+
+<section class="vendor-section" id="vendor">
+    <div class="container">
+        <div class="vendor-inner">
+            <div><h2>Have a vehicle to rent?</h2><p>Apply to list your car or motorcycle on MOTORENT.</p></div>
+            <a class="btn btn-light" href="/vendor.html">Become a vendor →</a>
+        </div>
+    </div>
+</section>
+</main>
+
+<footer>
+    <div class="container footer-inner">
+        <a href="/" class="logo">MOTO<span>RENT</span></a>
+        <p class="footer-copy">© <span id="year"></span> MOTORENT. All rights reserved.</p>
+        <div class="footer-links"><a href="#vehicles">Explore</a><a href="#how-it-works">How it works</a><a href="/vendor.html">For vendors</a></div>
+    </div>
+</footer>
+
+<div class="modal" id="authModal">
+    <div class="modal-panel">
+        <button class="modal-close" onclick="closeModal('authModal')">&times;</button>
+        <h2 id="authTitle">Welcome back.</h2>
+        <p class="modal-subtitle" id="authSubtitle">Sign in to continue.</p>
+        <div class="form-message" id="authMessage"></div>
+        <form class="modal-form" id="authForm">
+            <div class="field" id="nameField" style="display:none">
+                <label for="authName">Full name</label><input id="authName" autocomplete="name">
+            </div>
+            <div class="field" id="phoneField" style="display:none">
+                <label for="authPhone">Phone number</label><input id="authPhone" type="tel" autocomplete="tel">
+            </div>
+            <div class="field"><label for="authEmail">Email address</label><input id="authEmail" type="email" autocomplete="email" required></div>
+            <div class="field"><label for="authPassword">Password</label><input id="authPassword" type="password" autocomplete="current-password" required minlength="8"></div>
+            <button class="btn btn-light" id="authSubmit" type="submit">Sign in</button>
+        </form>
+        <p class="form-switch" id="authSwitch"></p>
+    </div>
+</div>
+
+<div class="modal" id="bookingModal">
+    <div class="modal-panel">
+        <button class="modal-close" onclick="closeModal('bookingModal')">&times;</button>
+        <h2>Request a booking.</h2>
+        <p class="modal-subtitle" id="bookingVehicleName"></p>
+        <div class="form-message" id="bookingMessage"></div>
+        <form id="bookingForm">
+            <div class="booking-dates">
+                <div class="field"><label for="startDate">Pickup date</label><input id="startDate" type="date" required></div>
+                <div class="field"><label for="endDate">Return date</label><input id="endDate" type="date" required></div>
+            </div>
+            <p class="modal-subtitle" id="bookingPrice"></p>
+            <button class="btn btn-light" style="width:100%" type="submit">Send booking request</button>
+        </form>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+const API = '/api';
+const $ = id => document.getElementById(id);
+
+let currentUser = null;
+let authMode = 'login';
+let vehicles = [];
+let selectedCategory = 'ALL';
+let selectedVehicle = null;
+let toastTimer = null;
+
+const SEGMENTS = {
+    MOTORCYCLE: ['Naked / Street', 'Sport', 'Cruiser', 'Adventure / Tourer', 'Scooter'],
+    CAR: ['Hatchback', 'Sedan', 'SUV', 'Luxury']
+};
+
+function getUser(data) {
+    if (!data) return null;
+    if (data.user) return data.user;
+    if (data.role) return data;
+    return null;
+}
+
+function getRole(user) {
+    return String(user?.role || '').toUpperCase();
+}
+
+function isCustomer() {
+    return Boolean(currentUser && getRole(currentUser) === 'CUSTOMER');
+}
+
+async function api(endpoint, options = {}) {
+    const response = await fetch(`${API}${endpoint}`, {
+        credentials: 'same-origin',
+        ...options,
+        headers: {
+            ...(options.body && !(options.body instanceof FormData) ? {'Content-Type': 'application/json'} : {}),
+            ...(options.headers || {})
+        }
+    });
+
+    const contentType = response.headers.get('content-type') || '';
+    const data = contentType.includes('application/json')
+        ? await response.json()
+        : await response.text();
+
+    if (!response.ok) {
+        const message = typeof data === 'object' && data
+            ? data.error || data.message || `Request failed (${response.status})`
+            : `Request failed (${response.status})`;
+        throw new Error(message);
+    }
+
+    return data;
+}
+
+/* SINGLE LOGIN: route accounts by role after successful authentication. */
+function redirectForRole(user) {
+    const role = getRole(user);
+
+    if (role === 'ADMIN') {
+        window.location.replace('/admin.html');
+        return true;
+    }
+
+    if (role === 'VENDOR') {
+        window.location.replace('/vendordash.html');
+        return true;
+    }
+
+    return false;
+}
+
+async function checkSession() {
+    try {
+        const data = await api('/auth/me');
+        currentUser = getUser(data);
+
+        if (currentUser && redirectForRole(currentUser)) return;
+    } catch (error) {
+        currentUser = null;
+    }
+
+    updateNavigation();
+
+    if (isCustomer()) {
+        loadMyBookings().catch(error => console.error(error));
+    }
+}
+
+function updateNavigation() {
+    const signedIn = Boolean(currentUser);
+    $('loginNav').style.display = signedIn ? 'none' : '';
+    $('registerNav').style.display = signedIn ? 'none' : '';
+    $('logoutNav').style.display = signedIn ? '' : 'none';
+    $('myBookings').style.display = isCustomer() ? 'block' : 'none';
+}
+
+function openAuth(mode = 'login') {
+    authMode = mode;
+    $('authForm').reset();
+    hideMessage('authMessage');
+
+    const registering = mode === 'register';
+    $('authTitle').textContent = registering ? 'Create your account.' : 'Welcome back.';
+    $('authSubtitle').textContent = registering
+        ? 'Create an account to request rentals.'
+        : 'Sign in to continue to MOTORENT.';
+
+    $('nameField').style.display = registering ? 'flex' : 'none';
+    $('phoneField').style.display = registering ? 'flex' : 'none';
+    $('authName').required = registering;
+    $('authPhone').required = registering;
+    $('authPassword').autocomplete = registering ? 'new-password' : 'current-password';
+    $('authSubmit').textContent = registering ? 'Create account' : 'Sign in';
+
+    $('authSwitch').innerHTML = registering
+        ? 'Already have an account? <button type="button" class="text-button" onclick="openAuth(\'login\')">Sign in</button>'
+        : 'New to MOTORENT? <button type="button" class="text-button" onclick="openAuth(\'register\')">Create an account</button>';
+
+    $('authModal').classList.add('open');
+}
+
+function closeModal(id) {
+    $(id).classList.remove('open');
+}
+
+function showMessage(id, message) {
+    const element = $(id);
+    element.textContent = message;
+    element.style.display = 'block';
+}
+
+function hideMessage(id) {
+    const element = $(id);
+    element.textContent = '';
+    element.style.display = 'none';
+}
+
+function showToast(message) {
+    const toast = $('toast');
+    toast.textContent = message;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+async function logout() {
+    try {
+        await api('/auth/logout', {method: 'POST'});
+        currentUser = null;
+        updateNavigation();
+        $('bookingList').innerHTML = '';
+        showToast('Signed out successfully.');
+    } catch (error) {
+        showToast(error.message);
+    }
+}
+
+$('authForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    hideMessage('authMessage');
+
+    const payload = {
+        email: $('authEmail').value.trim(),
+        password: $('authPassword').value
+    };
+
+    if (authMode === 'register') {
+        payload.name = $('authName').value.trim();
+        payload.phone = $('authPhone').value.trim();
+    }
+
+    $('authSubmit').disabled = true;
+    $('authSubmit').textContent = 'Please wait...';
+
+    try {
+        const endpoint = authMode === 'register' ? '/auth/register' : '/auth/login';
+        const data = await api(endpoint, {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+
+        let user = getUser(data);
+
+        if (!user || !user.role) {
+            user = getUser(await api('/auth/me'));
+        }
+
+        if (!user || !user.role) {
+            throw new Error('Login succeeded but the account role could not be loaded. Refresh and try again.');
+        }
+
+        currentUser = user;
+        closeModal('authModal');
+
+        // Important: do not reject non-customer accounts on the homepage.
+        if (redirectForRole(currentUser)) return;
+
+        updateNavigation();
+        showToast(authMode === 'register' ? 'Account created successfully.' : 'Signed in successfully.');
+
+        if (isCustomer()) {
+            await loadMyBookings();
+        }
+    } catch (error) {
+        showMessage('authMessage', error.message);
+    } finally {
+        $('authSubmit').disabled = false;
+        $('authSubmit').textContent = authMode === 'register' ? 'Create account' : 'Sign in';
+    }
+});
+
+/* VEHICLES */
+function normalizeVehicle(vehicle) {
+    return {
+        ...vehicle,
+        id: vehicle.vehicle_id ?? vehicle.id,
+        type: String(vehicle.vehicle_type ?? vehicle.type ?? '').toUpperCase(),
+        brand: vehicle.brand || '',
+        model: vehicle.model || '',
+        segment: vehicle.segment || '',
+        price: Number(vehicle.price_per_day ?? vehicle.price ?? 0),
+        location: vehicle.location || '',
+        image: vehicle.image_path || vehicle.image || ''
+    };
+}
+
+function escapeHTML(value) {
+    return String(value ?? '').replace(/[&<>"']/g, character => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    })[character]);
+}
+
+function vehicleImage(vehicle) {
+    if (!vehicle.image) return '';
+    if (/^https?:\/\//i.test(vehicle.image)) return vehicle.image;
+    return '/' + vehicle.image.replace(/^\/+/, '');
+}
+
+function setCategory(category) {
+    selectedCategory = category;
+    $('searchCategory').value = category;
+    document.querySelectorAll('.tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.category === category);
+    });
+    populateSegments();
+    renderVehicles();
+}
+
+function populateSegments() {
+    const select = $('segmentFilter');
+    const previous = select.value;
+    const choices = selectedCategory === 'ALL'
+        ? [...new Set(vehicles.map(v => v.segment).filter(Boolean))]
+        : (SEGMENTS[selectedCategory] || []);
+
+    select.innerHTML = '<option value="">All categories</option>' +
+        choices.map(segment => `<option value="${escapeHTML(segment)}">${escapeHTML(segment)}</option>`).join('');
+
+    if (choices.includes(previous)) select.value = previous;
+}
+
+function renderVehicles() {
+    const grid = $('vehicleGrid');
+    const search = $('vehicleSearch').value.trim().toLowerCase();
+    const location = $('searchLocation').value.trim().toLowerCase();
+    const segment = $('segmentFilter').value;
+    const sort = $('sortFilter').value;
+
+    let list = vehicles.filter(vehicle => {
+        const categoryMatch = selectedCategory === 'ALL' || vehicle.type === selectedCategory;
+        const segmentMatch = !segment || vehicle.segment === segment;
+        const locationMatch = !location || vehicle.location.toLowerCase().includes(location);
+        const searchText = `${vehicle.brand} ${vehicle.model} ${vehicle.segment} ${vehicle.location} ${vehicle.type}`.toLowerCase();
+        return categoryMatch && segmentMatch && locationMatch && searchText.includes(search);
+    });
+
+    if (sort === 'low') list.sort((a, b) => a.price - b.price);
+    if (sort === 'high') list.sort((a, b) => b.price - a.price);
+
+    $('resultsCount').textContent = `${list.length} vehicle${list.length === 1 ? '' : 's'}`;
+
+    if (!list.length) {
+        grid.innerHTML = '<div class="empty-state"><h3>No vehicles found.</h3><p>Try changing your search or filters. Vendors must add listings before they appear here.</p></div>';
+        return;
+    }
+
+    grid.innerHTML = list.map(vehicle => `
+        <article class="vehicle-card">
+            <div class="vehicle-image">
+                ${vehicle.image
+                    ? `<img src="${escapeHTML(vehicleImage(vehicle))}" alt="${escapeHTML(vehicle.brand)} ${escapeHTML(vehicle.model)}" loading="lazy" onerror="this.style.display='none'">`
+                    : ''}
+                <span class="vehicle-type">${escapeHTML(vehicle.type)}</span>
+            </div>
+            <div class="vehicle-info">
+                <div class="vehicle-category">${escapeHTML(vehicle.segment)}</div>
+                <h3 class="vehicle-name">${escapeHTML(vehicle.brand)} ${escapeHTML(vehicle.model)}</h3>
+                <p class="vehicle-location">${escapeHTML(vehicle.location)}</p>
+                <div class="vehicle-bottom">
+                    <div class="vehicle-price"><strong>₹${vehicle.price.toLocaleString('en-IN')}</strong><span> / day</span></div>
+                    <button class="btn btn-light btn-small" onclick="startBooking(${Number(vehicle.id)})">Request</button>
+                </div>
+            </div>
+        </article>
+    `).join('');
+}
+
+async function loadVehicles() {
+    try {
+        const data = await api('/vehicles');
+        vehicles = (Array.isArray(data) ? data : data.vehicles || []).map(normalizeVehicle);
+        populateSegments();
+        renderVehicles();
+    } catch (error) {
+        $('resultsCount').textContent = 'Unable to load';
+        $('vehicleGrid').innerHTML = `<div class="empty-state"><h3>Could not load vehicles.</h3><p>${escapeHTML(error.message)}. Check that the server is running.</p></div>`;
+    }
+}
+
+$('searchForm').addEventListener('submit', event => {
+    event.preventDefault();
+    selectedCategory = $('searchCategory').value;
+    document.querySelectorAll('.tab').forEach(tab => tab.classList.toggle('active', tab.dataset.category === selectedCategory));
+    populateSegments();
+    renderVehicles();
+    $('vehicles').scrollIntoView({behavior: 'smooth'});
+});
+
+$('searchCategory').addEventListener('change', () => setCategory($('searchCategory').value));
+$('searchLocation').addEventListener('input', renderVehicles);
+$('vehicleSearch').addEventListener('input', renderVehicles);
+$('segmentFilter').addEventListener('change', renderVehicles);
+$('sortFilter').addEventListener('change', renderVehicles);
+
+/* BOOKINGS */
+function startBooking(vehicleId) {
+    if (!currentUser) {
+        openAuth('login');
+        showMessage('authMessage', 'Sign in or create an account before requesting a booking.');
+        return;
+    }
+
+    if (!isCustomer()) {
+        if (redirectForRole(currentUser)) return;
+        showToast('Only customer accounts can request bookings.');
+        return;
+    }
+
+    selectedVehicle = vehicles.find(vehicle => Number(vehicle.id) === Number(vehicleId));
+    if (!selectedVehicle) {
+        showToast('Vehicle not found. Refresh the page and try again.');
+        return;
+    }
+
+    const today = new Date();
+    const minDate = new Date(today.getTime() - today.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    $('startDate').min = minDate;
+    $('endDate').min = minDate;
+    $('startDate').value = '';
+    $('endDate').value = '';
+    $('bookingVehicleName').textContent = `${selectedVehicle.brand} ${selectedVehicle.model} · ${selectedVehicle.location}`;
+    $('bookingPrice').textContent = `₹${selectedVehicle.price.toLocaleString('en-IN')} per day. The owner will respond to your request.`;
+    hideMessage('bookingMessage');
+    $('bookingModal').classList.add('open');
+}
+
+$('startDate').addEventListener('change', () => {
+    $('endDate').min = $('startDate').value || $('startDate').min;
+    if ($('endDate').value && $('endDate').value <= $('startDate').value) $('endDate').value = '';
+});
+
+$('bookingForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    hideMessage('bookingMessage');
+
+    if (!selectedVehicle) {
+        showMessage('bookingMessage', 'Select a vehicle again and retry.');
+        return;
+    }
+
+    const pickup = $('startDate').value;
+    const returned = $('endDate').value;
+
+    if (!pickup || !returned || returned <= pickup) {
+        showMessage('bookingMessage', 'Choose a valid pickup date and a return date after pickup.');
+        return;
+    }
+
+    const submitButton = $('bookingForm').querySelector('button[type="submit"]');
+    submitButton.disabled = true;
+
+    try {
+        await api('/bookings', {
+            method: 'POST',
+            body: JSON.stringify({
+                vehicle_id: selectedVehicle.id,
+                pickup_datetime: `${pickup}T10:00:00`,
+                return_datetime: `${returned}T10:00:00`
+            })
+        });
+
+        closeModal('bookingModal');
+        showToast('Booking request sent.');
+        await loadMyBookings();
+        $('myBookings').scrollIntoView({behavior: 'smooth'});
+    } catch (error) {
+        showMessage('bookingMessage', error.message);
+    } finally {
+        submitButton.disabled = false;
+    }
+});
+
+async function loadMyBookings() {
+    if (!isCustomer()) return;
+
+    try {
+        const data = await api('/my-bookings');
+        const bookings = Array.isArray(data) ? data : data.bookings || [];
+        const list = $('bookingList');
+
+        if (!bookings.length) {
+            list.innerHTML = '<div class="empty-state"><h3>No bookings yet.</h3><p>Your booking requests will appear here.</p></div>';
+            return;
+        }
+
+        list.innerHTML = bookings.map(booking => {
+            const id = Number(booking.booking_id ?? booking.id);
+            const name = `${booking.brand || ''} ${booking.model || booking.vehicle_name || ''}`.trim() || `Vehicle #${booking.vehicle_id}`;
+            const status = String(booking.status || 'PENDING').toUpperCase();
+            const pickup = booking.pickup_datetime ? new Date(booking.pickup_datetime).toLocaleDateString() : '—';
+            const returned = booking.return_datetime ? new Date(booking.return_datetime).toLocaleDateString() : '—';
+            const canCancel = ['PENDING', 'CONFIRMED'].includes(status);
+
+            return `<div class="booking-item">
+                <div><h3>${escapeHTML(name)}</h3>
+                <p>${escapeHTML(pickup)} – ${escapeHTML(returned)}</p>
+                <p>Booking #${id}</p>
+                <span class="booking-status">${escapeHTML(status)}</span></div>
+                ${canCancel ? `<button class="btn btn-outline btn-small" onclick="cancelBooking(${id})">Cancel request</button>` : ''}
+            </div>`;
+        }).join('');
+    } catch (error) {
+        $('bookingList').innerHTML = `<div class="empty-state"><h3>Unable to load bookings.</h3><p>${escapeHTML(error.message)}</p></div>`;
+    }
+}
+
+async function cancelBooking(id) {
+    if (!confirm('Cancel this booking request?')) return;
+
+    try {
+        await api(`/bookings/${id}/cancel`, {method: 'POST'});
+        showToast('Booking cancelled.');
+        await loadMyBookings();
+    } catch (error) {
+        showToast(error.message);
+    }
+}
+
+/* INITIALISE */
+$('year').textContent = new Date().getFullYear();
+
+document.querySelectorAll('.modal').forEach(modal => {
+    modal.addEventListener('click', event => {
+        if (event.target === modal) modal.classList.remove('open');
+    });
+});
+
+document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+        closeModal('authModal');
+        closeModal('bookingModal');
+    }
+});
+
+async function init() {
+    await loadVehicles();
+    await checkSession();
+}
+
+init();
+</script>
+</body>
+</html>
