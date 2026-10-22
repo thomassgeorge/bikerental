@@ -359,11 +359,13 @@ function isCustomer() {
 }
 
 async function api(endpoint, options = {}) {
+    const token = localStorage.getItem('motorent_token');
     const response = await fetch(`${API}${endpoint}`, {
         credentials: 'same-origin',
         ...options,
         headers: {
             ...(options.body && !(options.body instanceof FormData) ? {'Content-Type': 'application/json'} : {}),
+            ...(token ? {'Authorization': `Bearer ${token}`} : {}),
             ...(options.headers || {})
         }
     });
@@ -405,9 +407,15 @@ async function checkSession() {
         const data = await api('/auth/me');
         currentUser = getUser(data);
 
-        if (currentUser && redirectForRole(currentUser)) return;
+        if (currentUser) {
+            if (data.token) localStorage.setItem('motorent_token', data.token);
+            if (redirectForRole(currentUser)) return;
+        } else {
+            localStorage.removeItem('motorent_token');
+        }
     } catch (error) {
         currentUser = null;
+        localStorage.removeItem('motorent_token');
     }
 
     updateNavigation();
@@ -477,11 +485,13 @@ function showToast(message) {
 async function logout() {
     try {
         await api('/auth/logout', {method: 'POST'});
+        localStorage.removeItem('motorent_token');
         currentUser = null;
         updateNavigation();
         $('bookingList').innerHTML = '';
         showToast('Signed out successfully.');
     } catch (error) {
+        localStorage.removeItem('motorent_token');
         showToast(error.message);
     }
 }
@@ -518,6 +528,10 @@ $('authForm').addEventListener('submit', async event => {
 
         if (!user || !user.role) {
             throw new Error('Login succeeded but the account role could not be loaded. Refresh and try again.');
+        }
+
+        if (data && data.token) {
+            localStorage.setItem('motorent_token', data.token);
         }
 
         currentUser = user;

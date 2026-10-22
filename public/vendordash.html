@@ -112,9 +112,15 @@ function message(text,error=false){
 }
 
 async function api(url,options={}){
+ const token = localStorage.getItem("motorent_token");
  const response=await fetch(url,{
   credentials:"same-origin",
-  ...options
+  ...options,
+  headers:{
+   ...(options.body instanceof FormData?{}:{"Content-Type":"application/json"}),
+   ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+   ...(options.headers||{})
+  }
  });
  const data=await response.json().catch(()=>({}));
  if(!response.ok) throw new Error(data.error||"Request failed.");
@@ -325,11 +331,17 @@ async function respond(id,decision){
  }
 }
 
-async function showDashboard(){
+async function showDashboard(vendorUser){
  $("loginPanel").classList.add("hidden");
  $("dashboard").classList.remove("hidden");
- const result=await api("/api/auth/me");
- $("welcome").textContent="Signed in as "+result.user.email;
+ let user = vendorUser;
+ if (!user) {
+  try {
+   const result = await api("/api/auth/me");
+   user = result && result.user;
+  } catch (e) {}
+ }
+ $("welcome").textContent = "Signed in as " + ((user && user.email) || "Vendor");
  await Promise.all([loadVehicles(),loadBookings()]);
 }
 
@@ -339,20 +351,21 @@ $("loginForm").addEventListener("submit",async event=>{
  try{
   const result=await api("/api/auth/login",{
    method:"POST",
-   headers:{"Content-Type":"application/json"},
    body:JSON.stringify({
     email:form.get("email"),
     password:form.get("password")
    })
   });
 
-  if(result.user.role!=="VENDOR"){
+  if(!result.user || result.user.role!=="VENDOR"){
+   localStorage.removeItem("motorent_token");
    await api("/api/auth/logout",{method:"POST"});
    throw new Error("This login is not an approved vendor account.");
   }
 
+  if(result.token) localStorage.setItem("motorent_token", result.token);
   message("Login successful.");
-  await showDashboard();
+  await showDashboard(result.user);
  }catch(error){
   message(error.message,true);
  }
@@ -361,8 +374,10 @@ $("loginForm").addEventListener("submit",async event=>{
 $("logout").addEventListener("click",async()=>{
  try{
   await api("/api/auth/logout",{method:"POST"});
+  localStorage.removeItem("motorent_token");
   location.reload();
  }catch(error){
+  localStorage.removeItem("motorent_token");
   message(error.message,true);
  }
 });
@@ -371,10 +386,15 @@ updateSegments();
 $("photo").required=true;
 
 api("/api/auth/me").then(async result=>{
- if(result.user&&result.user.role==="VENDOR"){
-  await showDashboard();
+ if(result && result.user && result.user.role==="VENDOR"){
+  if(result.token) localStorage.setItem("motorent_token", result.token);
+  await showDashboard(result.user);
+ } else {
+  localStorage.removeItem("motorent_token");
  }
-}).catch(()=>{});
+}).catch(()=>{
+ localStorage.removeItem("motorent_token");
+});
 </script>
 </body>
 </html>

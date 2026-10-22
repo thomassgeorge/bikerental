@@ -40,7 +40,7 @@
         <div id="message" role="status"></div>
     </form>
 
-    <p><a href="/">← Back to Motorent</a></p>
+    <p style="margin-top:20px"><a href="/">← Back to Motorent</a></p>
 </main>
 
 <script>
@@ -48,23 +48,51 @@ const form = document.getElementById("applicationForm");
 const message = document.getElementById("message");
 const button = form.querySelector("button");
 
+// Check if user is already signed in and pre-fill details
+(async function init() {
+    try {
+        const token = localStorage.getItem("motorent_token");
+        const res = await fetch("/api/auth/me", {
+            credentials: "same-origin",
+            headers: token ? { "Authorization": `Bearer ${token}` } : {}
+        });
+        const data = await res.json();
+        if (data && data.user) {
+            if (data.token) localStorage.setItem("motorent_token", data.token);
+            if (data.user.name) document.getElementById("name").value = data.user.name;
+            if (data.user.email) document.getElementById("email").value = data.user.email;
+            if (data.user.phone) document.getElementById("phone").value = data.user.phone;
+        } else {
+            message.innerHTML = '<span style="color:#d9c28b">Note: You are not signed in. <a href="/" style="color:#fff;text-decoration:underline">Sign in on the home page</a> first to link this application to your account.</span>';
+        }
+    } catch (e) {}
+})();
+
 form.addEventListener("submit", async event => {
     event.preventDefault();
     button.disabled = true;
     message.textContent = "Submitting application...";
 
     try {
+        const token = localStorage.getItem("motorent_token");
         const data = Object.fromEntries(new FormData(form));
 
         const response = await fetch("/api/vendor-applications", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            headers: {
+                "Content-Type": "application/json",
+                ...(token ? { "Authorization": `Bearer ${token}` } : {})
+            },
             body: JSON.stringify(data)
         });
 
         const result = await response.json();
 
         if (!response.ok) {
+            if (response.status === 401) {
+                throw new Error("Please sign in or create an account on the home page before applying.");
+            }
             throw new Error(result.error || "Could not submit application.");
         }
 

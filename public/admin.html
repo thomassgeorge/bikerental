@@ -77,11 +77,13 @@ function showMessage(text, isError = false) {
 }
 
 async function api(url, options = {}) {
+    const token = localStorage.getItem("motorent_token");
     const response = await fetch(url, {
         credentials: "same-origin",
         ...options,
         headers: {
             ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
+            ...(token ? { "Authorization": `Bearer ${token}` } : {}),
             ...(options.headers || {})
         }
     });
@@ -234,20 +236,34 @@ async function refreshDashboard() {
     ]);
 }
 
+async function showAdminDashboard(adminUser) {
+    $("#loginPanel").classList.add("hidden");
+    $("#dashboard").classList.remove("hidden");
+    let user = adminUser;
+    if (!user) {
+        try {
+            const result = await api("/api/auth/me");
+            user = result && result.user;
+        } catch (e) {}
+    }
+    $("#welcome").textContent = "Signed in as " + ((user && user.email) || "Administrator");
+    await refreshDashboard();
+}
+
 async function checkSession() {
     try {
         const result = await api("/api/auth/me");
 
-        if (result.user && result.user.role === "ADMIN") {
-            $("#loginPanel").classList.add("hidden");
-            $("#dashboard").classList.remove("hidden");
-            $("#welcome").textContent = "Signed in as " + result.user.email;
-            await refreshDashboard();
+        if (result && result.user && String(result.user.role).toUpperCase() === "ADMIN") {
+            if (result.token) localStorage.setItem("motorent_token", result.token);
+            await showAdminDashboard(result.user);
         } else {
+            localStorage.removeItem("motorent_token");
             $("#loginPanel").classList.remove("hidden");
             $("#dashboard").classList.add("hidden");
         }
     } catch {
+        localStorage.removeItem("motorent_token");
         $("#loginPanel").classList.remove("hidden");
         $("#dashboard").classList.add("hidden");
     }
@@ -258,7 +274,7 @@ $("#loginForm").addEventListener("submit", async event => {
     const form = new FormData(event.currentTarget);
 
     try {
-        await api("/api/auth/login", {
+        const result = await api("/api/auth/login", {
             method: "POST",
             body: JSON.stringify({
                 email: form.get("email"),
@@ -266,8 +282,13 @@ $("#loginForm").addEventListener("submit", async event => {
             })
         });
 
-        showMessage("Login successful.");
-        await checkSession();
+        if (result && result.user && String(result.user.role).toUpperCase() === "ADMIN") {
+            if (result.token) localStorage.setItem("motorent_token", result.token);
+            showMessage("Login successful.");
+            await showAdminDashboard(result.user);
+        } else {
+            throw new Error("This account does not have administrator privileges.");
+        }
     } catch (error) {
         showMessage(error.message, true);
     }
@@ -279,8 +300,10 @@ $("#logout").addEventListener("click", async () => {
             method: "POST",
             body: JSON.stringify({})
         });
+        localStorage.removeItem("motorent_token");
         location.reload();
     } catch (error) {
+        localStorage.removeItem("motorent_token");
         showMessage(error.message, true);
     }
 });

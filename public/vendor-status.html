@@ -207,7 +207,13 @@
 
         async function loadStatus() {
             try {
-                const meResponse = await fetch("/api/auth/me");
+                const token = localStorage.getItem("motorent_token");
+                const authHeaders = token ? { "Authorization": `Bearer ${token}` } : {};
+
+                const meResponse = await fetch("/api/auth/me", {
+                    credentials: "same-origin",
+                    headers: authHeaders
+                });
                 const meData = await readJson(meResponse);
 
                 if (!meData.user) {
@@ -220,7 +226,12 @@
                     return;
                 }
 
-                const response = await fetch("/api/vendor-application-status");
+                if (meData.token) localStorage.setItem("motorent_token", meData.token);
+
+                const response = await fetch("/api/vendor-application-status", {
+                    credentials: "same-origin",
+                    headers: authHeaders
+                });
                 const data = await readJson(response);
 
                 if (data.isVendor) {
@@ -274,10 +285,13 @@
             feedback.textContent = "Submitting application...";
 
             try {
+                const token = localStorage.getItem("motorent_token");
                 const response = await fetch("/api/vendor-applications", {
                     method: "POST",
+                    credentials: "same-origin",
                     headers: {
-                        "Content-Type": "application/json"
+                        "Content-Type": "application/json",
+                        ...(token ? { "Authorization": `Bearer ${token}` } : {})
                     },
                     body: JSON.stringify({
                         business_name: document.getElementById("businessName").value.trim(),

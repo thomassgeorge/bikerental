@@ -1,5 +1,4 @@
 const express = require("express");
-const session = require("express-session");
 const bcrypt = require("bcryptjs");
 const multer = require("multer");
 const path = require("path");
@@ -9,6 +8,8 @@ const { put } = require("@vercel/blob");
 const db = require("./database.js");
 
 const app = express();
+app.set("trust proxy", 1);
+
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, "public");
 const IMAGE_DIR = path.join(PUBLIC_DIR, "images");
@@ -20,20 +21,114 @@ if (!fs.existsSync(IMAGE_DIR)) {
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(express.static(PUBLIC_DIR));
-app.use(
-    session({
-        name: "bikerental.sid",
-        secret: process.env.SESSION_SECRET || "local-development-secret-change-before-deploying",
-        resave: false,
-        saveUninitialized: false,
-        cookie: {
-            httpOnly: true,
-            sameSite: "lax",
-            secure: process.env.NODE_ENV === "production",
-            maxAge: 1000 * 60 * 60 * 8
+
+// ---------------------------------------------------------------------------
+// Serverless-compatible signed-cookie session middleware.
+// Works seamlessly across all Vercel function instances and cold-starts
+// without requiring in-memory state or external session store plugins.
+// ---------------------------------------------------------------------------
+const SESSION_SECRET = process.env.SESSION_SECRET || "motorent-session-secret-key-production-neon";
+const SESSION_COOKIE = "bikerental.sid";
+
+function signSession(data) {
+    const json = JSON.stringify(data);
+    const b64 = Buffer.from(json, "utf8").toString("base64url");
+    const sig = crypto.createHmac("sha256", SESSION_SECRET).update(b64).digest("base64url");
+    return `${b64}.${sig}`;
+}
+
+function verifySession(token) {
+    if (!token || typeof token !== "string") return null;
+    const dot = token.indexOf(".");
+    if (dot <= 0) return null;
+    const b64 = token.slice(0, dot);
+    const sig = token.slice(dot + 1);
+    if (!b64 || !sig) return null;
+    const expectedSig = crypto.createHmac("sha256", SESSION_SECRET).update(b64).digest("base64url");
+    const sigBuf = Buffer.from(sig);
+    const expBuf = Buffer.from(expectedSig);
+    if (sigBuf.length !== expBuf.length) return null;
+    if (!crypto.timingSafeEqual(sigBuf, expBuf)) return null;
+    try {
+        const data = JSON.parse(Buffer.from(b64, "base64url").toString("utf8"));
+        if (data.exp && Date.now() > data.exp) return null;
+        return data;
+    } catch {
+        return null;
+    }
+}
+
+function parseCookies(header) {
+    const map = {};
+    if (!header || typeof header !== "string") return map;
+    const pairs = header.split(";");
+    for (let i = 0; i < pairs.length; i++) {
+        const pair = pairs[i].trim();
+        const eq = pair.indexOf("=");
+        if (eq > 0) {
+            const key = pair.slice(0, eq).trim();
+            const val = pair.slice(eq + 1).trim();
+            map[key] = decodeURIComponent(val);
         }
-    })
-);
+    }
+    return map;
+}
+
+app.use((req, res, next) => {
+    const cookies = parseCookies(req.headers.cookie);
+    let token = cookies[SESSION_COOKIE];
+    if (!token && req.headers.authorization && req.headers.authorization.startsWith("Bearer ")) {
+        token = req.headers.authorization.slice(7).trim();
+    }
+    const sessionData = verifySession(token);
+
+    let sessionUser = sessionData ? sessionData.user : null;
+    let currentToken = sessionData ? token : null;
+
+    req.session = {
+        get user() {
+            return sessionUser;
+        },
+        set user(val) {
+            sessionUser = val;
+            if (val) {
+                currentToken = signSession({
+                    user: val,
+                    exp: Date.now() + 1000 * 60 * 60 * 24 * 7 // 7 days
+                });
+                res.cookie(SESSION_COOKIE, currentToken, {
+                    httpOnly: true,
+                    sameSite: "lax",
+                    secure: process.env.NODE_ENV === "production",
+                    path: "/",
+                    maxAge: 1000 * 60 * 60 * 24 * 7
+                });
+            } else {
+                currentToken = null;
+                res.clearCookie(SESSION_COOKIE, { path: "/" });
+            }
+        },
+        get token() {
+            if (currentToken) return currentToken;
+            if (sessionUser) {
+                currentToken = signSession({
+                    user: sessionUser,
+                    exp: Date.now() + 1000 * 60 * 60 * 24 * 7
+                });
+                return currentToken;
+            }
+            return null;
+        },
+        destroy(callback) {
+            sessionUser = null;
+            currentToken = null;
+            res.clearCookie(SESSION_COOKIE, { path: "/" });
+            if (typeof callback === "function") callback(null);
+        }
+    };
+
+    next();
+});
 
 // ---------------------------------------------------------------------------
 // Database readiness — initialise schema once per process (lazy singleton).
@@ -241,7 +336,7 @@ app.get("/api/auth/me", async (req, res) => {
     }
 
     req.session.user = getPublicUser(user);
-    res.json({ user: req.session.user });
+    res.json({ user: req.session.user, token: req.session.token });
 });
 
 app.post("/api/auth/register", async (req, res) => {
@@ -278,7 +373,7 @@ app.post("/api/auth/register", async (req, res) => {
         );
 
         req.session.user = getPublicUser(inserted);
-        res.status(201).json({ message: "Account created successfully.", user: req.session.user });
+        res.status(201).json({ message: "Account created successfully.", user: req.session.user, token: req.session.token });
     } catch (error) {
         console.error("Registration error:", error);
         res.status(500).json({ error: "Unable to create the account." });
@@ -316,7 +411,7 @@ app.post("/api/auth/login", async (req, res) => {
     }
 
     req.session.user = getPublicUser(user);
-    res.json({ message: "Login successful.", user: req.session.user });
+    res.json({ message: "Login successful.", user: req.session.user, token: req.session.token });
 });
 
 app.post("/api/auth/logout", (req, res) => {
@@ -329,7 +424,6 @@ app.post("/api/auth/logout", (req, res) => {
             return res.status(500).json({ error: "Unable to sign out." });
         }
 
-        res.clearCookie("bikerental.sid");
         res.json({ message: "Signed out successfully." });
     });
 });
@@ -472,6 +566,10 @@ app.post("/api/admin/vendor-applications/:id/approve", requireAdmin, async (req,
             );
 
             await client.query(`UPDATE users SET role = 'VENDOR' WHERE user_id = $1`, [userId]);
+            if (req.body.password && String(req.body.password).trim().length >= 8) {
+                const newHash = bcrypt.hashSync(String(req.body.password).trim(), 10);
+                await client.query(`UPDATE users SET password_hash = $1 WHERE user_id = $2`, [newHash, userId]);
+            }
             await client.query(
                 `UPDATE vendor_applications SET status = 'APPROVED', reviewed_at = NOW() WHERE application_id = $1`,
                 [applicationId]
