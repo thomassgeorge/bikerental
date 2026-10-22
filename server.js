@@ -1,4 +1,5 @@
 const express = require("express");
+const compression = require("compression");
 const bcrypt = require("bcryptjs");
 const multer = require("multer");
 const path = require("path");
@@ -18,9 +19,11 @@ if (!fs.existsSync(IMAGE_DIR)) {
     fs.mkdirSync(IMAGE_DIR, { recursive: true });
 }
 
+app.use(compression());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
-app.use(express.static(PUBLIC_DIR));
+// Cache static assets for 7 days
+app.use(express.static(PUBLIC_DIR, { maxAge: "7d", etag: true, lastModified: true }));
 
 // ---------------------------------------------------------------------------
 // Serverless-compatible signed-cookie session middleware.
@@ -614,12 +617,15 @@ app.post("/api/admin/vendor-applications/:id/reject", requireAdmin, async (req, 
 });
 
 app.get("/api/vehicles", async (req, res) => {
+    // Cache vehicle list for 30 seconds on CDN/clients — acceptable staleness
+    res.setHeader("Cache-Control", "public, max-age=30, stale-while-revalidate=60");
+
     const vehicles = await db.query(
         `SELECT v.*, ven.business_name, ven.location AS vendor_location
          FROM vehicles v
          LEFT JOIN vendors ven ON ven.vendor_id = v.vendor_id
-         WHERE UPPER(COALESCE(v.status, 'ACTIVE')) = 'ACTIVE'
-           AND (ven.status IS NULL OR UPPER(ven.status) = 'ACTIVE')
+         WHERE v.status = 'ACTIVE'
+           AND (ven.status IS NULL OR ven.status = 'ACTIVE')
          ORDER BY v.vehicle_id DESC`
     );
 
@@ -952,7 +958,9 @@ app.post("/api/vendor/bookings/:id/respond", requireAuth, async (req, res) => {
     }
 
     const id = Number(req.params.id);
-    const decision = String(req.body.status || req.body.action || "").trim().toUpperCase();
+    const decision = String(
+        req.body.decision || req.body.status || req.body.action || ""
+    ).trim().toUpperCase();
 
     if (!Number.isSafeInteger(id) || id < 1) {
         return res.status(400).json({ error: "Invalid booking ID." });
@@ -999,6 +1007,8 @@ app.post("/api/vendor/bookings/:id/respond", requireAuth, async (req, res) => {
     const newStatus = decision === "REJECTED" ? "REJECTED" : "CONFIRMED";
     await db.run(`UPDATE bookings SET status = $1 WHERE booking_id = $2`, [newStatus, id]);
 
+    // No-cache for mutation responses
+    res.setHeader("Cache-Control", "no-store");
     res.json({ message: `Booking ${newStatus.toLowerCase()}.`, status: newStatus });
 });
 

@@ -176,6 +176,9 @@ async function initializeDatabase() {
     await query(`CREATE INDEX IF NOT EXISTS idx_vehicles_status  ON vehicles(status)`);
     await query(`CREATE INDEX IF NOT EXISTS idx_bookings_customer ON bookings(customer_id)`);
     await query(`CREATE INDEX IF NOT EXISTS idx_bookings_vehicle  ON bookings(vehicle_id)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_bookings_status   ON bookings(status)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_bookings_dates    ON bookings(vehicle_id, pickup_datetime, return_datetime)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_vendors_user      ON vendors(user_id)`);
 }
 
 module.exports = {
